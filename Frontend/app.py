@@ -2,6 +2,10 @@ from functools import partial
 
 import customtkinter as ctk
 
+from Backend import cart
+from Backend.sample_data import canteens
+from Frontend.menu_page import MenuPage
+
 
 class CanteenApp(ctk.CTk):
     """Main window for the KMITL Canteen desktop application."""
@@ -23,25 +27,7 @@ class CanteenApp(ctk.CTk):
         )
         self.app_name_label.pack(pady=(48, 12))
 
-        # ข้อมูลตัวอย่าง: โรงอาหารแต่ละแห่งมีรายชื่อร้านของตัวเอง
-        self.canteens = {
-            "คณะครุศาสตร์": ["ร้านข้าวแกง", "ร้านก๋วยเตี๋ยว", "ร้านน้ำผลไม้"],
-            "คณะวิทยาศาสตร์": ["ร้านอาหารตามสั่ง", "ร้านข้าวมันไก่", "ร้านกาแฟ"],
-            "โรงอาหารพระเทพฯ": ["ร้านข้าวหมูแดง", "ร้านส้มตำ", "ร้านเครื่องดื่ม"],
-        }
-
-        # เมนูตัวอย่างของแต่ละร้าน: ชื่อเมนูคู่กับราคา (บาท)
-        self.menus = {
-            "ร้านข้าวแกง": {"ข้าวราดแกงเขียวหวาน": 40, "ข้าวราดผัดผัก": 35},
-            "ร้านก๋วยเตี๋ยว": {"ก๋วยเตี๋ยวหมู": 45, "ก๋วยเตี๋ยวไก่": 40},
-            "ร้านน้ำผลไม้": {"น้ำส้ม": 25, "น้ำแตงโม": 30},
-            "ร้านอาหารตามสั่ง": {"ข้าวกะเพราหมู": 50, "ข้าวผัดไก่": 45},
-            "ร้านข้าวมันไก่": {"ข้าวมันไก่ต้ม": 45, "ข้าวมันไก่ทอด": 50},
-            "ร้านกาแฟ": {"อเมริกาโน่เย็น": 40, "ลาเต้เย็น": 45},
-            "ร้านข้าวหมูแดง": {"ข้าวหมูแดง": 45, "ข้าวหมูกรอบ": 55},
-            "ร้านส้มตำ": {"ส้มตำไทย": 40, "ข้าวเหนียว": 10},
-            "ร้านเครื่องดื่ม": {"ชาไทย": 30, "โกโก้": 35},
-        }
+        self.canteens = canteens
 
         self.page_title_label = ctk.CTkLabel(
             self.main_frame,
@@ -50,7 +36,17 @@ class CanteenApp(ctk.CTk):
         )
         self.page_title_label.pack(pady=(0, 12))
 
-        self.page_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        # ตะกร้าเก็บอยู่ในหน่วยความจำ ปิดแอปแล้วข้อมูลจะหาย
+        self.cart = []
+        self.last_page = self.show_canteens
+        self.cart_button = ctk.CTkButton(
+            self.main_frame,
+            text="ตะกร้า (0 ชิ้น)",
+            command=self.show_cart,
+        )
+        self.cart_button.pack(pady=4)
+
+        self.page_frame = ctk.CTkScrollableFrame(self.main_frame, fg_color="transparent")
         self.page_frame.pack(fill="both", expand=True, padx=24, pady=12)
 
         self.show_canteens()
@@ -61,6 +57,7 @@ class CanteenApp(ctk.CTk):
             widget.destroy()
 
     def show_canteens(self):
+        self.last_page = self.show_canteens
         self.clear_page()
         self.page_title_label.configure(text="เลือกโรงอาหาร")
 
@@ -77,6 +74,7 @@ class CanteenApp(ctk.CTk):
             canteen_button.pack(pady=8)
 
     def show_shops(self, canteen_name):
+        self.last_page = partial(self.show_shops, canteen_name)
         self.clear_page()
         self.page_title_label.configure(text=f"ร้านอาหาร — {canteen_name}")
 
@@ -105,26 +103,143 @@ class CanteenApp(ctk.CTk):
         back_button.pack(pady=(24, 0))
 
     def show_menu(self, canteen_name, shop_name):
+        self.last_page = partial(self.show_menu, canteen_name, shop_name)
         self.clear_page()
         self.page_title_label.configure(text=f"{canteen_name} — {shop_name}")
 
-        sample_label = ctk.CTkLabel(
+        menu_page = MenuPage(
             self.page_frame,
-            text="เมนูและราคาตัวอย่าง — ยังสั่งอาหารไม่ได้",
+            shop_name,
+            partial(self.add_to_cart, canteen_name, shop_name),
+            partial(self.show_shops, canteen_name),
         )
-        sample_label.pack(pady=(0, 12))
+        menu_page.pack(fill="x")
 
-        for menu_name, price in self.menus[shop_name].items():
-            menu_label = ctk.CTkLabel(
+    def add_to_cart(self, canteen_name, shop_name, menu_name, price, options, note):
+        cart.add_item(self.cart, canteen_name, shop_name, menu_name, price, options, note)
+        self.update_cart_button()
+
+    def update_cart_button(self):
+        quantity = cart.get_total_quantity(self.cart)
+        self.cart_button.configure(text=f"ตะกร้า ({quantity} ชิ้น)")
+
+    def increase_quantity(self, item):
+        cart.increase_quantity(item)
+        self.show_shop_cart(item["canteen"], item["shop"])
+
+    def decrease_quantity(self, item):
+        cart.decrease_quantity(item)
+        self.show_shop_cart(item["canteen"], item["shop"])
+
+    def remove_item(self, item):
+        cart.remove_item(self.cart, item)
+        self.show_shop_cart(item["canteen"], item["shop"])
+
+    def show_cart(self):
+        self.clear_page()
+        self.update_cart_button()
+        self.page_title_label.configure(text="ตะกร้าของฉัน — เลือกร้าน")
+
+        if not self.cart:
+            empty_label = ctk.CTkLabel(self.page_frame, text="ยังไม่มีอาหารในตะกร้า")
+            empty_label.pack(pady=12)
+
+        for canteen_name, shop_name in cart.get_shops(self.cart):
+            shop_items = cart.get_shop_items(self.cart, canteen_name, shop_name)
+            quantity = cart.get_total_quantity(shop_items)
+            total = cart.get_total_price(shop_items)
+            shop_button = ctk.CTkButton(
                 self.page_frame,
-                text=f"{menu_name}  —  {price} บาท",
+                text=f"{canteen_name} / {shop_name}\n{quantity} ชิ้น — {total} บาท",
+                height=64,
+                command=partial(self.show_shop_cart, canteen_name, shop_name),
+            )
+            shop_button.pack(fill="x", pady=8)
+
+        ctk.CTkButton(
+            self.page_frame, text="กลับไปเลือกอาหารต่อ", command=self.last_page,
+        ).pack(pady=12)
+
+    def show_shop_cart(self, canteen_name, shop_name):
+        self.clear_page()
+        self.update_cart_button()
+        self.page_title_label.configure(text=f"ตะกร้า: {canteen_name} / {shop_name}")
+        shop_items = cart.get_shop_items(self.cart, canteen_name, shop_name)
+        if not shop_items:
+            ctk.CTkLabel(self.page_frame, text="ตะกร้าร้านนี้ว่างแล้ว").pack(pady=12)
+
+        total = cart.get_total_price(shop_items)
+        for item in shop_items:
+            item_total = cart.get_item_total(item)
+            item_frame = ctk.CTkFrame(self.page_frame)
+            item_frame.pack(fill="x", pady=8)
+            item_label = ctk.CTkLabel(
+                item_frame,
+                text=(f"{item['canteen']} / {item['shop']}\n"
+                      f"{item['menu']} — {item['price']} บาท × {item['quantity']} ชิ้น"
+                      f" = {item_total} บาท"),
                 font=ctk.CTkFont(size=18),
             )
-            menu_label.pack(pady=8)
+            item_label.pack(pady=10)
+
+            if item["options"]:
+                options_label = ctk.CTkLabel(
+                    item_frame, text="ตัวเลือก: " + ", ".join(item["options"]), wraplength=500,
+                )
+                options_label.pack(pady=4)
+            if item["note"]:
+                note_label = ctk.CTkLabel(
+                    item_frame, text="หมายเหตุ: " + item["note"], wraplength=500,
+                )
+                note_label.pack(pady=4)
+
+            button_frame = ctk.CTkFrame(item_frame, fg_color="transparent")
+            button_frame.pack(pady=(0, 12))
+
+            decrease_button = ctk.CTkButton(
+                button_frame,
+                text="−",
+                width=40,
+                command=partial(self.decrease_quantity, item),
+            )
+            decrease_button.pack(side="left", padx=4)
+            if item["quantity"] == 1:
+                decrease_button.configure(state="disabled")
+
+            quantity_label = ctk.CTkLabel(
+                button_frame, text=str(item["quantity"]), width=40,
+            )
+            quantity_label.pack(side="left", padx=4)
+
+            increase_button = ctk.CTkButton(
+                button_frame,
+                text="+",
+                width=40,
+                command=partial(self.increase_quantity, item),
+            )
+            increase_button.pack(side="left", padx=4)
+
+            remove_button = ctk.CTkButton(
+                button_frame,
+                text="ลบรายการ",
+                width=100,
+                command=partial(self.remove_item, item),
+            )
+            remove_button.pack(side="left", padx=(16, 4))
+
+        total_label = ctk.CTkLabel(
+            self.page_frame,
+            text=f"รวมร้านนี้ {total} บาท",
+            font=ctk.CTkFont(size=20, weight="bold"),
+        )
+        total_label.pack(pady=12)
 
         back_button = ctk.CTkButton(
             self.page_frame,
-            text="กลับไปเลือกร้าน",
-            command=partial(self.show_shops, canteen_name),
+            text="เพิ่มอาหารจากร้านนี้",
+            command=partial(self.show_menu, canteen_name, shop_name),
         )
-        back_button.pack(pady=(24, 0))
+        back_button.pack(pady=12)
+        ctk.CTkButton(
+            self.page_frame, text="กลับไปดูตะกร้าทุกร้าน", command=self.show_cart,
+        ).pack(pady=8)
