@@ -5,6 +5,7 @@ import customtkinter as ctk
 from Backend import cart
 from Backend.sample_data import canteens
 from Frontend.menu_page import MenuPage
+from Frontend.checkout_page import CheckoutPage
 
 
 class CanteenApp(ctk.CTk):
@@ -234,6 +235,12 @@ class CanteenApp(ctk.CTk):
         )
         total_label.pack(pady=12)
 
+        if shop_items:
+            ctk.CTkButton(
+                self.page_frame, text="สั่งอาหารร้านนี้",
+                command=partial(self.show_checkout, canteen_name, shop_name),
+            ).pack(pady=8)
+
         back_button = ctk.CTkButton(
             self.page_frame,
             text="เพิ่มอาหารจากร้านนี้",
@@ -243,3 +250,16 @@ class CanteenApp(ctk.CTk):
         ctk.CTkButton(
             self.page_frame, text="กลับไปดูตะกร้าทุกร้าน", command=self.show_cart,
         ).pack(pady=8)
+
+    def show_checkout(self, canteen_name, shop_name):
+        shop_items = cart.get_shop_items(self.cart, canteen_name, shop_name)
+        if not shop_items:
+            self.show_shop_cart(canteen_name, shop_name)
+            return
+        self.clear_page()
+        self.page_title_label.configure(text="ข้อมูลรับอาหารและตรวจรายการ")
+        page = CheckoutPage(
+            self.page_frame, canteen_name, shop_name, shop_items,
+            partial(self.show_shop_cart, canteen_name, shop_name),
+        )
+        page.pack(fill="x")
